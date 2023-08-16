@@ -3,10 +3,63 @@
 #include <cmath>
 #include "ortools/base/logging.h"
 
+constexpr auto ITERATIONS_MULT = 10u; /* simple constraint for computation time */
+using namespace operations_research;
+
 namespace csp {
-    solver::solver(std::vector<order_t>& orders_list, uint64_t blanks_width) : orders_list{ orders_list }, blanks_width_in_units{ blanks_width }
+    solver::solver(std::vector<order_t>& orders_list, uint64_t blanks_width) : orders_list{ orders_list }, blanks_width{ blanks_width }
     {
-        /* TODO: Check for empty input parameters */
+        /* TODO: Check for empty input parameters
+                 Check if any order of quantity 1 is greater than blanks */
+    }
+
+    void solver::print_patterns(solver::result& result, std::vector<std::vector<uint64_t>>& patterns)
+    {
+        size_t sol_val_num = result.solution_values.size();
+        size_t patterns_len = patterns.size();
+        size_t sol_val_j = 0;
+        uint64_t sum = 0;
+
+        for (size_t j = 0; j < sol_val_num; ++j) {
+            sol_val_j = static_cast<size_t>(result.solution_values[j]);
+            if (sol_val_j > 0) {
+                for (size_t z = 0; z < sol_val_j; ++z) {
+                    sum = 0;
+                    std::string delim = "";
+                    std::cout << "[";
+                    for (size_t i = 0; i < patterns_len; ++i) {                        
+                        if (patterns[i][j] > 0) {
+                            sum += orders_list[i].width * patterns[i][j];
+                            std::cout << delim << orders_list[i].width << " * " << patterns[i][j];
+                            delim = ", ";
+                        }                        
+                    }
+                    std::cout << "] : [ " << blanks_width - sum << " ]" << std::endl;
+                }
+            }
+        }
+    }
+
+    void solver::solve_large_model()
+    {
+        /* TODO: check if orders_list is set! */
+
+        size_t orders_num = orders_list.size();
+        std::vector<std::vector<uint64_t>> patterns = get_initial_patterns();
+        solver::result result;
+        for (int i = 0; i < ITERATIONS_MULT * orders_num; ++i) {
+            result = solve_master(patterns, false);
+            solver::result result_new = get_new_pattern(result);
+
+            /* add i-th cut of new pattern to i-thp pattern */
+            for (uint64_t j = 0; j < orders_list.size(); ++j) {
+                patterns[j].push_back(static_cast<uint64_t>(std::ceil(result_new.solution_values[j])));
+            }
+        }
+
+        result = solve_master(patterns, true);
+
+        print_patterns(result, patterns);
     }
 
     /*
@@ -18,8 +71,9 @@ namespace csp {
      */
     std::vector<std::vector<uint64_t>> solver::get_initial_patterns()
     {
-        uint64_t orders_num = orders_list.size();
-        std::vector<std::vector<uint64_t>> init_patterns( /* init vector of vectors as all zeroes */
+        size_t orders_num = orders_list.size();
+        /* init vector of vectors as all zeroes */
+        std::vector<std::vector<uint64_t>> init_patterns(
             orders_num,
             std::vector<uint64_t>(orders_num));
 
@@ -34,42 +88,105 @@ namespace csp {
         return init_patterns;
     }
 
-    solver::result solver::solve_master(std::vector<std::vector<uint64_t>>& patterns)
+    /* Cutting stock sub-problem */
+    solver::result solver::get_new_pattern(solver::result& last_result)
+    {
+        result ret;
+        std::unique_ptr<operations_research::MPSolver> solver;
+        init_solver(solver, true);
+
+        size_t marg_val_num =  last_result.marginal_values.size();
+
+        std::vector<operations_research::MPVariable*> new_pattern;
+
+        for (uint64_t i = 0; i < marg_val_num; ++i) {
+            new_pattern.push_back(solver->MakeIntVar(0.0, blanks_width, ""));
+        }
+
+        /* Create the objective - maximizes the sum of the values times the number of occurrence of that roll in a pattern */
+        operations_research::MPObjective* const objective = solver->MutableObjective();
+
+        for (int i = 0; i < marg_val_num; ++i) {
+            objective->SetCoefficient(new_pattern[i], last_result.marginal_values[i]);
+        }
+
+        objective->SetMaximization();
+
+        /* Ensuring that the pattern stays within the total width of the blank */
+        const double infinity = solver->infinity();
+        /* Order_length * Order_quantity <= Blank_width */
+        operations_research::MPConstraint* const constraints = solver->MakeRowConstraint(-infinity, blanks_width);
+        for (int i = 0; i < marg_val_num; ++i) {
+            constraints->SetCoefficient(new_pattern[i], static_cast<double>(orders_list[i].width));
+        }
+          
+        ret.result_status = solver->Solve();
+
+        // Check that the problem has an optimal solution.
+        if (ret.result_status != operations_research::MPSolver::OPTIMAL) {
+            LOG(INFO) << "The problem does not have an optimal solution!";
+            if (ret.result_status == operations_research::MPSolver::FEASIBLE) {
+                LOG(INFO) << "A potentially suboptimal solution was found";
+            }
+            else {
+                LOG(INFO) << "The solver could not solve the problem.";
+                return ret;
+            }
+        }
+
+        for (auto& x : new_pattern) {
+            if (x->integer()) {
+                ret.solution_values.push_back((*x).solution_value());
+            }
+            else {
+                ret.solution_values.push_back(ceil((*x).solution_value()));
+            }
+        }
+        
+        ret.best_solution = objective->Value();
+
+        return ret;
+    }
+
+    /* cutting stock master problem */
+    solver::result solver::solve_master(std::vector<std::vector<uint64_t>>& patterns, bool is_integer)
     {
         /* TODO: Check for empty patterns vector */
 
-        uint64_t patterns_num = patterns[0].size(); /* Assuming the matrix is squared */
+        size_t patterns_num = patterns.size();
+        size_t patterns_len = patterns[0].size();
         result ret;
 
-        std::unique_ptr<operations_research::MPSolver> solver(
-            operations_research::MPSolver::CreateSolver("GLOP_LINEAR_PROGRAMMING"));
-
-        if (!solver) {
-            LOG(WARNING) << "GLOP_LINEAR_PROGRAMMING solver unavailable.";
-            return ret;
-        }
+        std::unique_ptr<operations_research::MPSolver> solver;
+        init_solver(solver, is_integer);
 
         std::vector<operations_research::MPVariable*> y;
 
-        for (int i = 0; i < patterns_num; ++i) {
-            y.push_back(solver->MakeIntVar(0.0, 1000.0, ""));
+        for (int i = 0; i < patterns_len; ++i) {
+            y.push_back(solver->MakeIntVar(0.0, 100000.0, ""));
         }
 
         /* Create the objective - minimize total blanks used */
         operations_research::MPObjective* const objective = solver->MutableObjective();
 
-        for (int i = 0; i < patterns_num; ++i) {
+        for (int i = 0; i < patterns_len; ++i) {
             objective->SetCoefficient(y[i], 1);
         }
 
         objective->SetMinimization();
 
-        /* Add constraints that patterns (orders) must be met */
+        /* Add constraints that patterns must be met */
         const double infinity = solver->infinity();
         std::vector<operations_research::MPConstraint*> constraints;
         for (int i = 0; i < patterns_num; ++i) {
-            constraints.push_back(solver->MakeRowConstraint(orders_list[i].num, infinity));
-            for (int j = 0; j < patterns_num; ++j) {
+
+                constraints.push_back(solver->MakeRowConstraint(orders_list[i].num,
+                                       infinity)); /* cut additional pieces if blank have space left */
+
+                //constraints.push_back(solver->MakeRowConstraint(orders_list[i].num,
+                //    orders_list[i].num)); /* cut exactly the number of pieces ordered */
+
+            for (int j = 0; j < patterns_len; ++j) {
                 constraints.back()->SetCoefficient(y[j], patterns[i][j]);
             }
         }
@@ -89,32 +206,104 @@ namespace csp {
         }
 
         for (auto& x : y) {
-            ret.solution_values.push_back((*x).solution_value());
+            ret.solution_values.push_back(static_cast<uint64_t>(round((*x).solution_value())));
         }
 
         for (auto& x : constraints) {
-            ret.dual_values.push_back((*x).dual_value());
+            if (is_integer) {
+                ret.marginal_values.push_back(0);
+            }
+            else {
+                ret.marginal_values.push_back((*x).dual_value());
+            }
+            
         }
 
         return ret;
+    }
+
+    void solver::init_solver(std::unique_ptr<operations_research::MPSolver>& solver, bool is_integer)
+    {
+        if (is_integer) {
+            solver = std::unique_ptr<operations_research::MPSolver>(
+                operations_research::MPSolver::CreateSolver("CBC_MIXED_INTEGER_PROGRAMMING"));
+        }
+        else {
+            solver = std::unique_ptr<operations_research::MPSolver>(
+                operations_research::MPSolver::CreateSolver("GLOP_LINEAR_PROGRAMMING"));
+        }
+
+        if (!solver) {
+            LOG(WARNING) << "Solver unavailable.";
+        }
     }
 }
 
 int main() {
 
     std::vector<csp::order_t> orders_list {
+        //{ 20, 700 },
+        //{ 40, 400 },
+        //{ 32, 234 },
+        //{ 256, 23 },
+
+        //{ 7, 234 },
+        //{ 7, 23 },
+
+        //{ 21, 700 },
+        //{ 44, 400 },
+        
+        //{ 5, 700 },
+
+
+        //{ 12, 657 },
+        //{ 40, 90 },
+        //{ 44, 45 },
+        //{ 32, 289 },
+        //{ 26, 345 },
+        //{ 12, 64 },
+        //{ 20, 705 },
+        //{ 40, 45 },
+        //{ 34, 234 },
+        //{ 2, 2345 },
+        //{ 16, 37 },
+
+
+
+        //{ 6, 25 },
+        //{ 12, 21 },
+        //{ 7, 26 },
+        //{ 356, 23 },
+        //{ 345, 33 },
+        //{ 345, 15 },
+        //{ 2, 34 },
+
+        //{ 3, 3 },
+        //{ 3, 4 },
+
+        //{ 20,70 },
+        //{ 40,40 },
+
+        //{ 7, 234 },
+        //{ 7, 23 },
+
         { 20, 700 },
         { 40, 400 },
-        { 32, 234 },
-        { 256, 23 },
-        { 12, 657 },
+        //{ 32, 234 },
+        //{ 256, 23 },
+
+        //{ 5, 700 },
+
+        //{ 3,30 },
+        //{ 2,72 },
+        //{ 5,50 }
+
+
     };
 
-    std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, 3000);
+    std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, 3200);
 
-    std::vector<std::vector<uint64_t>> initial_patterns = solver->get_initial_patterns();
-
-    solver->solve_master(initial_patterns);
+    solver->solve_large_model();
 
     return EXIT_SUCCESS;
 }

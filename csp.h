@@ -15,26 +15,30 @@ namespace csp {
         uint64_t width;   /*!< Width of the pieces */
     };
 
+
     class solver
     {
         public:
-            uint64_t blanks_width_in_units = 0;
-            const double blanks_width_in_percent = 100.0;
+            uint64_t blanks_width = 0;
             std::vector<order_t> orders_list; /*!< List of orders */
 
         private:
             struct result {
                 std::vector<double> solution_values;
-                std::vector<double> dual_values;
+                std::vector<double> marginal_values;
+                double best_solution = 0;
                 operations_research::MPSolver::ResultStatus result_status = operations_research::MPSolver::NOT_SOLVED;
             };
 
         public:
-            solver(std::vector<order_t>& orders_list, uint64_t blanks_width);
+            solver(std::vector<order_t>& orders_list, uint64_t blanks_width);            
+            void solve_large_model();
 
-        public:
+        private:
+            void print_patterns(solver::result& result, std::vector<std::vector<uint64_t>>& patterns);
             std::vector<std::vector<uint64_t>> get_initial_patterns();
-            result solve_master(std::vector<std::vector<uint64_t>>& patterns);
-
+            result get_new_pattern(solver::result& last_result);
+            result solve_master(std::vector<std::vector<uint64_t>>& patterns, bool is_integer);
+            void init_solver(std::unique_ptr<operations_research::MPSolver>& solver, bool is_integer);
     };   
 }
