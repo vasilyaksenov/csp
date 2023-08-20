@@ -18,11 +18,12 @@ namespace csp {
 
     class solver
     {
-        public:
+        public:            
             uint64_t blanks_width = 0;
             std::vector<order_t> orders_list; /*!< List of orders */
 
         private:
+            uint64_t _iterations = 20; /*  simple constraint for computation time */
             struct result {
                 std::vector<double> solution_values;
                 std::vector<double> marginal_values;
@@ -31,7 +32,10 @@ namespace csp {
             };
 
         public:
-            solver(std::vector<order_t>& orders_list, uint64_t blanks_width);            
+            solver(std::vector<order_t>& orders_list, uint64_t blanks_width);
+            solver(std::vector<order_t>& orders_list, uint64_t blanks_width, uint64_t iterations);
+
+            void set_iterations(uint64_t iterations);
             void solve_large_model();
 
         private:

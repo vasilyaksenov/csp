@@ -5,13 +5,18 @@
 #include <argumentum/argparse-h.h>
 #include "rapidcsv/src/rapidcsv.h"
 
-constexpr auto ITERATIONS_MULT = 10u; /* simple constraint for computation time */
 using namespace std;
 using namespace operations_research;
 using namespace argumentum;
 
 namespace csp {
     solver::solver(std::vector<order_t>& orders_list, uint64_t blanks_width) : orders_list{ orders_list }, blanks_width{ blanks_width }
+    {
+        /* TODO: Check for empty input parameters
+                 Check if any order of quantity 1 is greater than blanks */
+    }
+
+    solver::solver(std::vector<order_t>& orders_list, uint64_t blanks_width, uint64_t iterations) : orders_list{ orders_list }, blanks_width{ blanks_width }, _iterations{ iterations }
     {
         /* TODO: Check for empty input parameters
                  Check if any order of quantity 1 is greater than blanks */
@@ -44,6 +49,11 @@ namespace csp {
         }
     }
 
+    void solver::set_iterations(uint64_t iterations)
+    {
+        _iterations = iterations;
+    }
+
     void solver::solve_large_model()
     {
         /* TODO: check if orders_list is set! */
@@ -51,7 +61,7 @@ namespace csp {
         size_t orders_num = orders_list.size();
         std::vector<std::vector<uint64_t>> patterns = get_initial_patterns();
         solver::result result;
-        for (int i = 0; i < ITERATIONS_MULT * orders_num; ++i) {
+        for (int i = 0; i < _iterations; ++i) {
             result = solve_master(patterns, false);
             solver::result result_new = get_new_pattern(result);
 
@@ -246,13 +256,14 @@ namespace csp {
 int main(int argc, char** argv) {
     string filename;
     int blank_width;
+    optional<int> iterations;
     bool exact_cut = false;
 
     /* Parse input parameters */
     auto parser = argument_parser{};
     auto params = parser.params();
     parser.config().program(argv[0]).description("Cutting Stock Promblem");
-    params.add_parameter(blank_width, "--width", "-w" )
+    params.add_parameter(blank_width, "--width", "-w")
         .help("Blank width")
         .nargs(1)
         .required(true);
@@ -260,6 +271,9 @@ int main(int argc, char** argv) {
         .help("Input file name")
         .nargs(1)
         .required(true);
+    params.add_parameter(iterations, "--iterations", "-i")
+        .help("Simple constraint for computation time (default: 20)")
+        .nargs(1);
     params.add_parameter(exact_cut, "--exact", "-e")
         .nargs(0)
         .help("Cut exactly as demanded (default: use leftovers to cut random pieces from the order)");
@@ -269,8 +283,8 @@ int main(int argc, char** argv) {
 
     cout << "Blank width is " << blank_width << "." << endl;
 
-    rapidcsv::Document doc(filename);    
-    
+    rapidcsv::Document doc(filename);
+
     vector<int64_t> quantity = doc.GetColumn<int64_t>("quantity");
     vector<int64_t> width = doc.GetColumn<int64_t>("width");
 
@@ -301,11 +315,11 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        orders_list.push_back(csp::order_t{ 
+        orders_list.push_back(csp::order_t{
             .num = static_cast<uint64_t>(quantity[i]),
-            .width = static_cast<uint64_t>(width[i]) });
+                .width = static_cast<uint64_t>(width[i]) });
     }
-        
+
     if (bad_orders_num > 0) cout << "Found " << bad_orders_num << " order(s) with invalid parameters." << endl;
     if (orders_list.size() == 0) {
         cout << "No valid orders!" << endl;
@@ -319,8 +333,8 @@ int main(int argc, char** argv) {
 
     /* Get solution */
     std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, blank_width);
+    if (iterations.has_value()) solver->set_iterations(static_cast<uint64_t>(iterations.value()));
     solver->solve_large_model();
-
 
     return EXIT_SUCCESS;
 }

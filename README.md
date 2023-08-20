@@ -41,5 +41,11 @@ cmake --build build --config Release
 To run the example copy example.csv file to csp.exe and run: 
 
 ```sh
-csp.exe -f example.csv -w 2300
+csp.exe -f example_0.csv -w 2300 -i 20
+```
+
+or 
+
+```sh
+csp.exe -f example_1.csv -w 2300 -i 100
 ```
