@@ -2,9 +2,12 @@
 #include <ostream>
 #include <cmath>
 #include "ortools/base/logging.h"
+#include <argumentum/argparse-h.h>
 
 constexpr auto ITERATIONS_MULT = 10u; /* simple constraint for computation time */
+using namespace std;
 using namespace operations_research;
+using namespace argumentum;
 
 namespace csp {
     solver::solver(std::vector<order_t>& orders_list, uint64_t blanks_width) : orders_list{ orders_list }, blanks_width{ blanks_width }
@@ -239,71 +242,27 @@ namespace csp {
     }
 }
 
-int main() {
+int main(int argc, char** argv) {
+    string stringValue;
+    vector<int> numbers;
+    bool exactCut = false;
 
-    std::vector<csp::order_t> orders_list {
-        //{ 20, 700 },
-        //{ 40, 400 },
-        //{ 32, 234 },
-        //{ 256, 23 },
+    auto parser = argument_parser{};
+    auto params = parser.params();
+    parser.config().program(argv[0]).description("Cutting Stock Promblem");
+    params.add_parameter(stringValue, "--input_file", "-f")
+        .help("Input file name")
+        .nargs(1)
+        .required(true);
+    params.add_parameter(exactCut, "--exact", "-e")
+        .nargs(0)
+        .help("Cut exactly as demanded (default: use leftovers to cut random pieces from the order)");
 
-        //{ 7, 234 },
-        //{ 7, 23 },
+    if (!parser.parse_args(argc, argv, 1))
+        return 1;
 
-        //{ 21, 700 },
-        //{ 44, 400 },
-        
-        //{ 5, 700 },
+    cout << stringValue << "\n";
 
-
-        //{ 12, 657 },
-        //{ 40, 90 },
-        //{ 44, 45 },
-        //{ 32, 289 },
-        //{ 26, 345 },
-        //{ 12, 64 },
-        //{ 20, 705 },
-        //{ 40, 45 },
-        //{ 34, 234 },
-        //{ 2, 2345 },
-        //{ 16, 37 },
-
-
-
-        //{ 6, 25 },
-        //{ 12, 21 },
-        //{ 7, 26 },
-        //{ 356, 23 },
-        //{ 345, 33 },
-        //{ 345, 15 },
-        //{ 2, 34 },
-
-        //{ 3, 3 },
-        //{ 3, 4 },
-
-        //{ 20,70 },
-        //{ 40,40 },
-
-        //{ 7, 234 },
-        //{ 7, 23 },
-
-        { 20, 700 },
-        { 40, 400 },
-        //{ 32, 234 },
-        //{ 256, 23 },
-
-        //{ 5, 700 },
-
-        //{ 3,30 },
-        //{ 2,72 },
-        //{ 5,50 }
-
-
-    };
-
-    std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, 3200);
-
-    solver->solve_large_model();
 
     return EXIT_SUCCESS;
 }

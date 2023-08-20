@@ -23,9 +23,14 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/google/or-tools.git
   GIT_TAG        v9.6
 )
-
 FetchContent_MakeAvailable(or-tools)
+
+FetchContent_Declare(Argumentum
+   GIT_REPOSITORY https://github.com/mmahnic/argumentum.git
+   GIT_TAG master
+)
+FetchContent_MakeAvailable(Argumentum)
 
 add_executable (csp "csp.cpp" "csp.h")
 
-target_link_libraries(csp ortools::ortools)
+target_link_libraries(csp ortools::ortools Argumentum::headers)
