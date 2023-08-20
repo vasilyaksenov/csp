@@ -34,3 +34,7 @@ FetchContent_MakeAvailable(Argumentum)
 add_executable (csp "csp.cpp" "csp.h")
 
 target_link_libraries(csp ortools::ortools Argumentum::headers)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                       ${CMAKE_SOURCE_DIR}/example_data $<TARGET_FILE_DIR:${PROJECT_NAME}>/example_data)
