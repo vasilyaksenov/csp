@@ -3,6 +3,7 @@
 #include <cmath>
 #include "ortools/base/logging.h"
 #include <argumentum/argparse-h.h>
+#include "rapidcsv/src/rapidcsv.h"
 
 constexpr auto ITERATIONS_MULT = 10u; /* simple constraint for computation time */
 using namespace std;
@@ -243,25 +244,82 @@ namespace csp {
 }
 
 int main(int argc, char** argv) {
-    string stringValue;
-    vector<int> numbers;
-    bool exactCut = false;
+    string filename;
+    int blank_width;
+    bool exact_cut = false;
 
+    /* Parse input parameters */
     auto parser = argument_parser{};
     auto params = parser.params();
     parser.config().program(argv[0]).description("Cutting Stock Promblem");
-    params.add_parameter(stringValue, "--input_file", "-f")
+    params.add_parameter(blank_width, "--width", "-w" )
+        .help("Blank width")
+        .nargs(1)
+        .required(true);
+    params.add_parameter(filename, "--file", "-f")
         .help("Input file name")
         .nargs(1)
         .required(true);
-    params.add_parameter(exactCut, "--exact", "-e")
+    params.add_parameter(exact_cut, "--exact", "-e")
         .nargs(0)
         .help("Cut exactly as demanded (default: use leftovers to cut random pieces from the order)");
 
     if (!parser.parse_args(argc, argv, 1))
         return 1;
 
-    cout << stringValue << "\n";
+    cout << "Blank width is " << blank_width << "." << endl;
+
+    rapidcsv::Document doc(filename);    
+    
+    vector<int64_t> quantity = doc.GetColumn<int64_t>("quantity");
+    vector<int64_t> width = doc.GetColumn<int64_t>("width");
+
+    cout << "Found " << quantity.size() << " order(s)." << endl;
+
+    uint64_t bad_orders_num = 0;
+    bool bad_order_f = false;
+    std::vector<csp::order_t> orders_list;
+
+    for (uint64_t i = 0; i < quantity.size(); ++i) {
+        if (width[i] > blank_width) {
+            cout << "Order number " << i << " width " << width[i]
+                << " doesn't' fit into blank: " << blank_width << endl;
+            bad_order_f = true;
+        }
+        if (width[i] <= 0) {
+            cout << "Order number " << i << " have invalid width: " << width[i] << endl;
+            bad_order_f = true;
+        }
+        if (quantity[i] <= 0) {
+            cout << "Order number " << i << " have invalid quantity: " << quantity[i] << endl;
+            bad_order_f = true;
+        }
+
+        if (bad_order_f) {
+            ++bad_orders_num;
+            bad_order_f = false;
+            continue;
+        }
+
+        orders_list.push_back(csp::order_t{ 
+            .num = static_cast<uint64_t>(quantity[i]),
+            .width = static_cast<uint64_t>(width[i]) });
+    }
+        
+    if (bad_orders_num > 0) cout << "Found " << bad_orders_num << " order(s) with invalid parameters." << endl;
+    if (orders_list.size() == 0) {
+        cout << "No valid orders!" << endl;
+        return EXIT_SUCCESS;
+    }
+    if (orders_list.size() < quantity.size()) {
+        cout << endl << "Will use " << orders_list.size() << " valid order(s)." << endl;
+    }
+
+    cout << endl << "Solution: " << endl;
+
+    /* Get solution */
+    std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, blank_width);
+    solver->solve_large_model();
 
 
     return EXIT_SUCCESS;
