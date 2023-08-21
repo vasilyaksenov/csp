@@ -24,6 +24,7 @@ namespace csp {
 
         private:
             uint64_t _iterations = 20; /*  simple constraint for computation time */
+            bool _is_exact_cut = false;
             struct result {
                 std::vector<double> solution_values;
                 std::vector<double> marginal_values;
@@ -36,6 +37,7 @@ namespace csp {
             solver(std::vector<order_t>& orders_list, uint64_t blanks_width, uint64_t iterations);
 
             void set_iterations(uint64_t iterations);
+            void set_exact_cut(bool is_exact_cut);
             void solve_large_model();
 
         private:

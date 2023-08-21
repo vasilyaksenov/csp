@@ -29,6 +29,18 @@ namespace csp {
         size_t sol_val_j = 0;
         uint64_t sum = 0;
 
+        orders_list;
+        map<uint64_t, uint64_t> orders;
+
+        for (auto& l : orders_list) {
+            if (auto search = orders.find(l.width); search != orders.end()) {
+                search->second += l.num; // add quantity if width already exist
+            }
+            else {
+                orders.insert(make_pair(l.width, l.num)); // insert new width
+            }            
+        }
+
         for (size_t j = 0; j < sol_val_num; ++j) {
             sol_val_j = static_cast<size_t>(result.solution_values[j]);
             if (sol_val_j > 0) {
@@ -36,11 +48,28 @@ namespace csp {
                     sum = 0;
                     std::string delim = "";
                     std::cout << "[";
-                    for (size_t i = 0; i < patterns_len; ++i) {                        
+                    for (size_t i = 0; i < patterns_len; ++i) {
                         if (patterns[i][j] > 0) {
-                            sum += orders_list[i].width * patterns[i][j];
-                            std::cout << delim << orders_list[i].width << " * " << patterns[i][j];
-                            delim = ", ";
+                            if (_is_exact_cut) {
+                                auto order = orders.find(orders_list[i].width);
+                                if (order->second >= patterns[i][j]) {
+                                    sum += orders_list[i].width * patterns[i][j];
+                                    std::cout << delim << orders_list[i].width << " * " << patterns[i][j];
+                                    delim = ", ";
+                                    order->second -= patterns[i][j];
+                                }
+                                else if (order->second != 0) {
+                                    sum += orders_list[i].width * order->second;
+                                    std::cout << delim << orders_list[i].width << " * " << order->second;
+                                    delim = ", ";
+                                    order->second = 0;
+                                }
+                            }
+                            else {
+                                sum += orders_list[i].width * patterns[i][j];
+                                std::cout << delim << orders_list[i].width << " * " << patterns[i][j];
+                                delim = ", ";
+                            }
                         }                        
                     }
                     std::cout << "] : [ " << blanks_width - sum << " ]" << std::endl;
@@ -52,6 +81,11 @@ namespace csp {
     void solver::set_iterations(uint64_t iterations)
     {
         _iterations = iterations;
+    }
+
+    void solver::set_exact_cut(bool is_exact_cut)
+    {
+        _is_exact_cut = is_exact_cut;
     }
 
     void solver::solve_large_model()
@@ -334,6 +368,7 @@ int main(int argc, char** argv) {
     /* Get solution */
     std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, blank_width);
     if (iterations.has_value()) solver->set_iterations(static_cast<uint64_t>(iterations.value()));
+    solver->set_exact_cut(exact_cut);
     solver->solve_large_model();
 
     return EXIT_SUCCESS;
