@@ -47,11 +47,6 @@ cd build/RELEASE
 And run:
 
 ```sh
-csp.exe -f example_data/example_0.csv -w 2300 -i 20
-```
-
-or 
-
-```sh
-csp.exe -f example_data/example_1.csv -w 2300 -i 100
+csp.exe -f example_data/example_0.csv -w 2300
+csp.exe -f example_data/example_1.csv -w 2300
 ```

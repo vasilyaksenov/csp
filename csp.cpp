@@ -16,12 +16,6 @@ namespace csp {
                  Check if any order of quantity 1 is greater than blanks */
     }
 
-    solver::solver(std::vector<order_t>& orders_list, uint64_t blanks_width, uint64_t iterations) : orders_list{ orders_list }, blanks_width{ blanks_width }, _iterations{ iterations }
-    {
-        /* TODO: Check for empty input parameters
-                 Check if any order of quantity 1 is greater than blanks */
-    }
-
     void solver::print_patterns(solver::result& result, std::vector<std::vector<uint64_t>>& patterns)
     {
         size_t sol_val_num = result.solution_values.size();
@@ -40,6 +34,8 @@ namespace csp {
                 orders.insert(make_pair(l.width, l.num)); // insert new width
             }            
         }
+
+        cout << "Solution: " << endl;
 
         for (size_t j = 0; j < sol_val_num; ++j) {
             sol_val_j = static_cast<size_t>(result.solution_values[j]);
@@ -78,7 +74,7 @@ namespace csp {
         }
     }
 
-    void solver::set_iterations(uint64_t iterations)
+    void solver::set_iterations(optional<int64_t> iterations)
     {
         _iterations = iterations;
     }
@@ -95,13 +91,40 @@ namespace csp {
         size_t orders_num = orders_list.size();
         std::vector<std::vector<uint64_t>> patterns = get_initial_patterns();
         solver::result result;
-        for (int i = 0; i < _iterations; ++i) {
-            result = solve_master(patterns, false);
-            solver::result result_new = get_new_pattern(result);
+        int z = 0;
+        
+        if (_iterations.has_value()) {
+            uint64_t iterations = _iterations.value();
+            solver::result result_new;
+            for (int i = 0; i < iterations; ++i) {
+                result = solve_master(patterns, false);
+                result_new = get_new_pattern(result);
 
-            /* add i-th cut of new pattern to i-thp pattern */
-            for (uint64_t j = 0; j < orders_list.size(); ++j) {
-                patterns[j].push_back(static_cast<uint64_t>(std::ceil(result_new.solution_values[j])));
+                /* add i-th cut of new pattern to i-thp pattern */
+                for (uint64_t j = 0; j < orders_list.size(); ++j) {
+                    patterns[j].push_back(static_cast<uint64_t>(std::round(result_new.solution_values[j])));
+                }
+            }
+        }
+        else {
+            solver::result result_new;
+            bool run = true;
+            vector<double> solution_values_old(orders_num, 0.0);            
+
+            while (run) {
+                result = solve_master(patterns, false);
+                result_new = get_new_pattern(result);
+
+                /* add i-th cut of new pattern to i-thp pattern */
+                for (uint64_t j = 0; j < orders_list.size(); ++j) {
+                    patterns[j].push_back(static_cast<uint64_t>(std::round(result_new.solution_values[j])));
+                }
+
+                /* if new pattern is equal to old one then end iteration */
+                if (result_new.solution_values == solution_values_old) {
+                    run = false;
+                }
+                solution_values_old = result_new.solution_values;
             }
         }
 
@@ -290,7 +313,7 @@ namespace csp {
 int main(int argc, char** argv) {
     string filename;
     int blank_width;
-    optional<int> iterations;
+    optional<int64_t> iterations;
     bool exact_cut = false;
 
     /* Parse input parameters */
@@ -306,7 +329,7 @@ int main(int argc, char** argv) {
         .nargs(1)
         .required(true);
     params.add_parameter(iterations, "--iterations", "-i")
-        .help("Simple constraint for computation time (default: 20)")
+        .help("Simple constraint for computation time (default: until get best solution)")
         .nargs(1);
     params.add_parameter(exact_cut, "--exact", "-e")
         .nargs(0)
@@ -363,11 +386,18 @@ int main(int argc, char** argv) {
         cout << endl << "Will use " << orders_list.size() << " valid order(s)." << endl;
     }
 
-    cout << endl << "Solution: " << endl;
+    if (iterations.has_value()) {
+        cout << "Will generate patterns over " << iterations.value() << " iterations." << endl;
+    }
+    else {
+        cout << "Will generate patterns until get best solution." << endl;
+    }
+
+    cout << "Computating..." << endl << endl;
 
     /* Get solution */
     std::unique_ptr<csp::solver> solver = std::make_unique<csp::solver>(orders_list, blank_width);
-    if (iterations.has_value()) solver->set_iterations(static_cast<uint64_t>(iterations.value()));
+    solver->set_iterations(iterations);
     solver->set_exact_cut(exact_cut);
     solver->solve_large_model();
 
