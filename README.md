@@ -51,3 +51,24 @@ csp.exe -f example_data/example_0.csv -w 2300
 csp.exe -f example_data/example_1.csv -w 2300
 csp.exe -f example_data/example_2.csv -w 3000
 ```
+
+Solution example:
+
+```sh
+[406 * 3, 1623 * 1] : [ 159 ]
+[1084 * 1, 1575 * 1, 333 * 1] : [ 8 ]
+[1084 * 1, 1575 * 1, 333 * 1] : [ 8 ]
+[2084 * 1, 824 * 1, 23 * 4] : [ 0 ]
+```
+
+Here, each line is a cutting pattern for one workpiece, the length of each is 3000.
+In total, 4 blanks are used in the solution.
+The first blank here is cut to 3 pieces of length 406 and 1 piece of length 1623,
+the last value, separated by colon, 159 - is waste.
+The second blank is cut to 1 piece of length 1084, 1 piece of length 1575, 1 piece of length 333 and 8 waste.
+The third blank is cut in the same way as the second.
+The last blank is cut to 1 piece of length 2084, 1 piece of length 824, 4 pieces of length 23 and have no waste.
+
+
+
+
