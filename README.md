@@ -49,4 +49,5 @@ And run:
 ```sh
 csp.exe -f example_data/example_0.csv -w 2300
 csp.exe -f example_data/example_1.csv -w 2300
+csp.exe -f example_data/example_2.csv -w 3000
 ```
